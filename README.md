@@ -92,6 +92,12 @@ Install the helper commands:
 ./scripts/install-helpers.sh
 ```
 
+Install the BeamNG user mod:
+
+```bash
+./scripts/install-beamng-mod.sh
+```
+
 Install udev access rules for the TrackIR camera and `/dev/uinput`:
 
 ```bash
@@ -111,7 +117,9 @@ $HOME/.local/bin/beamng-trackir-launch %command%
 
 Launch the native Linux build of BeamNG.drive. The wrapper starts the helper,
 waits for the virtual 6DOF device to exist, launches the game, and stops the
-helper after the game exits.
+helper after the game exits. The helper also streams pose to a small BeamNG user
+mod over localhost UDP so BeamNG can receive the axes through its own virtual
+input API.
 
 ## ✅ First Test
 

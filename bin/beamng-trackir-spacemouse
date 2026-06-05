@@ -2,6 +2,7 @@
 import ctypes
 import os
 import signal
+import socket
 import sys
 import time
 from pathlib import Path
@@ -52,6 +53,10 @@ def axis_value(delta, range_degrees, invert=False):
 
 def signed_to_u16(value):
     return int(clamp(value + 32768, 0, 65535))
+
+
+def normalized_axis(value):
+    return clamp(value / 32767.0, -1.0, 1.0)
 
 
 def pose_valid(pose):
@@ -198,6 +203,9 @@ def main():
     invert_pitch = env_bool("BEAMNG_TRACKIR_INVERT_PITCH", False)
     invert_roll = env_bool("BEAMNG_TRACKIR_INVERT_ROLL", False)
     test_sweep = env_bool("BEAMNG_TRACKIR_TEST_SWEEP", False)
+    udp_enabled = env_bool("BEAMNG_TRACKIR_UDP", True)
+    udp_port = int(env_float("BEAMNG_TRACKIR_UDP_PORT", "4447"))
+    udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) if udp_enabled else None
 
     trackir = LinuxTrack()
     trackir.start()
@@ -249,6 +257,9 @@ def main():
                 pitch = int(-yaw / 2)
                 roll = int(yaw / 3)
                 virtual_device.emit_pose(yaw, pitch, roll)
+                if udp_socket:
+                    packet = f"BTR1 {normalized_axis(yaw):.6f} {normalized_axis(pitch):.6f} {normalized_axis(roll):.6f}".encode()
+                    udp_socket.sendto(packet, ("127.0.0.1", udp_port))
                 now = time.monotonic()
                 if now - last_status > 1.0:
                     STATUS_FILE.write_text(
@@ -278,6 +289,9 @@ def main():
                 pitch = axis_value(pose[1] - center[1], pitch_range, invert_pitch)
                 roll = axis_value(pose[2] - center[2], roll_range, invert_roll)
                 virtual_device.emit_pose(yaw, pitch, roll)
+                if udp_socket:
+                    packet = f"BTR1 {normalized_axis(yaw):.6f} {normalized_axis(pitch):.6f} {normalized_axis(roll):.6f}".encode()
+                    udp_socket.sendto(packet, ("127.0.0.1", udp_port))
 
             now = time.monotonic()
             if now - last_status > 1.0:
