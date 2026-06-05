@@ -11,6 +11,7 @@ from evdev import AbsInfo, UInput, ecodes
 
 STATE_DIR = Path.home() / ".local/state/beamng-trackir-spacemouse"
 PID_FILE = STATE_DIR / "adapter.pid"
+STATUS_FILE = STATE_DIR / "status.txt"
 CENTER_FLAGS = (Path("/tmp/beamng_trackir_center"), Path("/tmp/linuxtrack_npclient_center"))
 PAUSE_FLAGS = (Path("/tmp/beamng_trackir_pause"), Path("/tmp/linuxtrack_npclient_pause"))
 
@@ -178,6 +179,7 @@ def main():
     invert_yaw = env_bool("BEAMNG_TRACKIR_INVERT_YAW", False)
     invert_pitch = env_bool("BEAMNG_TRACKIR_INVERT_PITCH", False)
     invert_roll = env_bool("BEAMNG_TRACKIR_INVERT_ROLL", False)
+    test_sweep = env_bool("BEAMNG_TRACKIR_TEST_SWEEP", False)
 
     trackir = LinuxTrack()
     trackir.start()
@@ -185,6 +187,8 @@ def main():
     center = None
     paused = False
     running = True
+    last_status = 0.0
+    sweep_start = time.monotonic()
 
     def stop(_signum, _frame):
         nonlocal running
@@ -215,6 +219,24 @@ def main():
                     print("Paused." if paused else "Resumed.")
                     sys.stdout.flush()
 
+            if test_sweep:
+                phase = ((time.monotonic() - sweep_start) % 4.0) / 4.0
+                if phase < 0.5:
+                    yaw = int(-32767 + phase * 4 * 32767)
+                else:
+                    yaw = int(32767 - (phase - 0.5) * 4 * 32767)
+                pitch = int(-yaw / 2)
+                roll = int(yaw / 3)
+                virtual_device.emit_pose(yaw, pitch, roll)
+                now = time.monotonic()
+                if now - last_status > 1.0:
+                    STATUS_FILE.write_text(
+                        f"mode=test_sweep paused={paused} yaw={yaw} pitch={pitch} roll={roll}\n"
+                    )
+                    last_status = now
+                time.sleep(1.0 / hz)
+                continue
+
             pose = trackir.pose()
             if pose is None:
                 time.sleep(1.0 / hz)
@@ -234,11 +256,28 @@ def main():
                 roll = axis_value(pose[2] - center[2], roll_range, invert_roll)
                 virtual_device.emit_pose(yaw, pitch, roll)
 
+            now = time.monotonic()
+            if now - last_status > 1.0:
+                yaw_delta = angle_delta(pose[0], center[0])
+                pitch_delta = pose[1] - center[1]
+                roll_delta = pose[2] - center[2]
+                STATUS_FILE.write_text(
+                    "mode=trackir "
+                    f"paused={paused} "
+                    f"pose_ypr=({pose[0]:.3f},{pose[1]:.3f},{pose[2]:.3f}) "
+                    f"delta_ypr=({yaw_delta:.3f},{pitch_delta:.3f},{roll_delta:.3f}) "
+                    f"axis_ypr=({axis_value(yaw_delta, yaw_range, invert_yaw)},"
+                    f"{axis_value(pitch_delta, pitch_range, invert_pitch)},"
+                    f"{axis_value(roll_delta, roll_range, invert_roll)})\n"
+                )
+                last_status = now
+
             time.sleep(1.0 / hz)
     finally:
         virtual_device.close()
         trackir.shutdown()
         remove_flag(PID_FILE)
+        remove_flag(STATUS_FILE)
 
 
 if __name__ == "__main__":
