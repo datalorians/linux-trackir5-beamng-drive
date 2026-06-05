@@ -121,7 +121,7 @@ class LinuxTrack:
             ctypes.byref(tz),
             ctypes.byref(counter),
         )
-        if result < 0:
+        if result <= 0:
             return None
         return yaw.value, pitch.value, roll.value, tx.value, ty.value, tz.value
 
