@@ -42,6 +42,19 @@ side: LinuxTrack for the TrackIR 5 camera, plus a Proton-compatible
 BeamNG.drive is primarily a Windows game. BeamNG's own FAQ says Linux/Proton is
 not an officially guaranteed platform, even though many users run it that way.
 
+Important: Steam may launch BeamNG.drive's native Linux binary on Linux:
+
+```text
+~/.local/share/Steam/steamapps/common/BeamNG.drive/BinLinux/BeamNG.drive.x64
+```
+
+This package targets the Windows/Proton build because the observed
+NaturalPoint/TrackIR integration is in:
+
+```text
+~/.local/share/Steam/steamapps/common/BeamNG.drive/Bin64/BeamNG.drive.x64.exe
+```
+
 ## 📦 Install
 
 Install build dependencies first. On Debian/Ubuntu-like systems:
@@ -92,17 +105,27 @@ Optional Cinnamon/X11 shortcut installer:
 
 ## 🎮 Steam Setup
 
+Force BeamNG.drive to use Proton:
+
+1. Open BeamNG.drive properties in Steam.
+2. Go to `Compatibility`.
+3. Enable `Force the use of a specific Steam Play compatibility tool`.
+4. Choose Proton Experimental or another Proton version you normally use.
+
 BeamNG.drive should start TrackIR when it loads the installed `NPClient64.dll`.
 TrackIR itself does **not** need a Steam launch option.
 
-Launch BeamNG.drive normally through Steam. If BeamNG.drive creates the Proton
-prefix after your first launch, rerun:
+Launch BeamNG.drive through Steam after forcing Proton. If BeamNG.drive creates
+the Proton prefix after that first Proton launch, rerun:
 
 ```bash
 ./scripts/install-beamng-drive-bridge.sh
 ```
 
 That second run writes the NaturalPoint registry path inside the Proton prefix.
+If `~/.local/share/Steam/steamapps/compatdata/284160` exists but has no `pfx`
+directory, BeamNG.drive has probably launched the native Linux binary instead
+of the Windows/Proton binary.
 
 ### Optional Exit Cleanup
 

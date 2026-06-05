@@ -29,6 +29,22 @@ The main Windows game binary is:
 Bin64/BeamNG.drive.x64.exe
 ```
 
+The native Linux binary is:
+
+```text
+BinLinux/BeamNG.drive.x64
+```
+
+Local testing found TrackIR/NaturalPoint strings in the Windows `Bin64` binary,
+but not in the native Linux binary. Steam logs showed a native launch like:
+
+```text
+SteamLaunch AppId=284160 -- .../BeamNG.drive/BinLinux/BeamNG.drive.x64 -forceCloud on
+```
+
+That launch creates an empty `compatdata/284160` directory but no Proton
+`pfx`, because Proton was not used.
+
 The installer copies the bridge into both locations and, when the Proton prefix
 exists, registers `C:\linuxtrack` as the NaturalPoint client location.
 
