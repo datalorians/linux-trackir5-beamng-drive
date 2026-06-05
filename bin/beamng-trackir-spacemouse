@@ -50,6 +50,19 @@ def axis_value(delta, range_degrees, invert=False):
     return int(value * 32767)
 
 
+def pose_valid(pose):
+    yaw, pitch, roll, tx, ty, tz = pose
+    if abs(yaw) < 0.001 and abs(pitch) < 0.001 and abs(roll) < 0.001:
+        return False
+    if abs(pitch) > 120.0 or abs(roll) > 120.0:
+        return False
+    return True
+
+
+def average_pose(samples):
+    return tuple(sum(sample[i] for sample in samples) / len(samples) for i in range(6))
+
+
 def remove_flag(flag):
     try:
         flag.unlink()
@@ -185,6 +198,7 @@ def main():
     trackir.start()
     virtual_device = BeamNGSpaceMouse()
     center = None
+    center_samples = []
     paused = False
     running = True
     last_status = 0.0
@@ -238,15 +252,17 @@ def main():
                 continue
 
             pose = trackir.pose()
-            if pose is None:
+            if pose is None or not pose_valid(pose):
                 time.sleep(1.0 / hz)
                 continue
 
             if center is None:
-                center = pose
-                virtual_device.emit_pose(0, 0, 0)
-                print(f"Centered at yaw={pose[0]:.2f}, pitch={pose[1]:.2f}, roll={pose[2]:.2f}.")
-                sys.stdout.flush()
+                center_samples.append(pose)
+                if len(center_samples) >= int(min(hz, 30)):
+                    center = average_pose(center_samples[-int(min(hz, 30)):])
+                    virtual_device.emit_pose(0, 0, 0)
+                    print(f"Centered at yaw={center[0]:.2f}, pitch={center[1]:.2f}, roll={center[2]:.2f}.")
+                    sys.stdout.flush()
                 time.sleep(1.0 / hz)
                 continue
 
