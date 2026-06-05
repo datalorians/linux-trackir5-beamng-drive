@@ -50,6 +50,10 @@ def axis_value(delta, range_degrees, invert=False):
     return int(value * 32767)
 
 
+def signed_to_u16(value):
+    return int(clamp(value + 32768, 0, 65535))
+
+
 def pose_valid(pose):
     yaw, pitch, roll, tx, ty, tz = pose
     if abs(yaw) < 0.001 and abs(pitch) < 0.001 and abs(roll) < 0.001:
@@ -146,14 +150,14 @@ class LinuxTrack:
 class BeamNGSpaceMouse:
     def __init__(self):
         caps = {
-            ecodes.EV_KEY: [ecodes.BTN_0],
+            ecodes.EV_KEY: [ecodes.BTN_TRIGGER, ecodes.BTN_THUMB],
             ecodes.EV_ABS: [
-                (ecodes.ABS_X, AbsInfo(0, -32768, 32767, 0, 0, 0)),
-                (ecodes.ABS_Y, AbsInfo(0, -32768, 32767, 0, 0, 0)),
-                (ecodes.ABS_Z, AbsInfo(0, -32768, 32767, 0, 0, 0)),
-                (ecodes.ABS_RX, AbsInfo(0, -32768, 32767, 0, 0, 0)),
-                (ecodes.ABS_RY, AbsInfo(0, -32768, 32767, 0, 0, 0)),
-                (ecodes.ABS_RZ, AbsInfo(0, -32768, 32767, 0, 0, 0)),
+                (ecodes.ABS_X, AbsInfo(32768, 0, 65535, 255, 4095, 0)),
+                (ecodes.ABS_Y, AbsInfo(32768, 0, 65535, 255, 4095, 0)),
+                (ecodes.ABS_Z, AbsInfo(32768, 0, 65535, 255, 4095, 0)),
+                (ecodes.ABS_RX, AbsInfo(32768, 0, 65535, 255, 4095, 0)),
+                (ecodes.ABS_RY, AbsInfo(32768, 0, 65535, 255, 4095, 0)),
+                (ecodes.ABS_RZ, AbsInfo(32768, 0, 65535, 255, 4095, 0)),
             ],
         }
         self.ui = UInput(
@@ -164,16 +168,17 @@ class BeamNGSpaceMouse:
             version=0x0111,
             bustype=ecodes.BUS_USB,
         )
-        self.ui.write(ecodes.EV_KEY, ecodes.BTN_0, 0)
+        self.ui.write(ecodes.EV_KEY, ecodes.BTN_TRIGGER, 0)
+        self.ui.write(ecodes.EV_KEY, ecodes.BTN_THUMB, 0)
         self.ui.syn()
 
     def emit_pose(self, yaw, pitch, roll):
-        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, yaw)
-        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RX, pitch)
-        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RY, roll)
-        self.ui.write(ecodes.EV_ABS, ecodes.ABS_X, 0)
-        self.ui.write(ecodes.EV_ABS, ecodes.ABS_Y, 0)
-        self.ui.write(ecodes.EV_ABS, ecodes.ABS_Z, 0)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, signed_to_u16(yaw))
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RX, signed_to_u16(pitch))
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RY, signed_to_u16(roll))
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_X, 32768)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_Y, 32768)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_Z, 32768)
         self.ui.syn()
 
     def close(self):
