@@ -51,6 +51,28 @@ def axis_value(delta, range_degrees, invert=False):
     return int(value * 32767)
 
 
+def apply_deadzone(value, deadzone):
+    if abs(value) < int(32767 * deadzone):
+        return 0
+    return value
+
+
+def smooth_angle(current, target, alpha):
+    return current + angle_delta(target, current) * alpha
+
+
+def smooth_linear(current, target, alpha):
+    return current + (target - current) * alpha
+
+
+def pose_jump_degrees(previous, current):
+    return max(
+        abs(angle_delta(current[0], previous[0])),
+        abs(current[1] - previous[1]),
+        abs(current[2] - previous[2]),
+    )
+
+
 def signed_to_u16(value):
     return int(clamp(value + 32768, 0, 65535))
 
@@ -206,12 +228,16 @@ def main():
     udp_enabled = env_bool("BEAMNG_TRACKIR_UDP", True)
     udp_port = int(env_float("BEAMNG_TRACKIR_UDP_PORT", "4447"))
     udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) if udp_enabled else None
+    smoothing = clamp(env_float("BEAMNG_TRACKIR_SMOOTHING", "0.025"), 0.01, 1.0)
+    outlier_degrees = env_float("BEAMNG_TRACKIR_OUTLIER_DEG", "10")
+    deadzone = clamp(env_float("BEAMNG_TRACKIR_DEADZONE", "0.12"), 0.0, 0.5)
 
     trackir = LinuxTrack()
     trackir.start()
     virtual_device = BeamNGSpaceMouse()
     center = None
     center_samples = []
+    filtered_pose = None
     paused = False
     running = True
     last_status = 0.0
@@ -235,6 +261,7 @@ def main():
                 if flag.exists():
                     center = None
                     center_samples.clear()
+                    filtered_pose = None
                     remove_flag(flag)
                     virtual_device.emit_pose(0, 0, 0)
                     print("Center requested.")
@@ -278,16 +305,31 @@ def main():
                 center_samples.append(pose)
                 if len(center_samples) >= int(min(hz, 30)):
                     center = average_pose(center_samples[-int(min(hz, 30)):])
+                    filtered_pose = center
                     virtual_device.emit_pose(0, 0, 0)
                     print(f"Centered at yaw={center[0]:.2f}, pitch={center[1]:.2f}, roll={center[2]:.2f}.")
                     sys.stdout.flush()
                 time.sleep(1.0 / hz)
                 continue
 
+            if filtered_pose is None:
+                filtered_pose = center
+
+            jump = pose_jump_degrees(filtered_pose, pose)
+            if jump <= outlier_degrees:
+                filtered_pose = (
+                    smooth_angle(filtered_pose[0], pose[0], smoothing),
+                    smooth_linear(filtered_pose[1], pose[1], smoothing),
+                    smooth_linear(filtered_pose[2], pose[2], smoothing),
+                    smooth_linear(filtered_pose[3], pose[3], smoothing),
+                    smooth_linear(filtered_pose[4], pose[4], smoothing),
+                    smooth_linear(filtered_pose[5], pose[5], smoothing),
+                )
+
             if not paused:
-                yaw = axis_value(angle_delta(pose[0], center[0]), yaw_range, invert_yaw)
-                pitch = axis_value(pose[1] - center[1], pitch_range, invert_pitch)
-                roll = axis_value(pose[2] - center[2], roll_range, invert_roll)
+                yaw = apply_deadzone(axis_value(angle_delta(filtered_pose[0], center[0]), yaw_range, invert_yaw), deadzone)
+                pitch = apply_deadzone(axis_value(filtered_pose[1] - center[1], pitch_range, invert_pitch), deadzone)
+                roll = apply_deadzone(axis_value(filtered_pose[2] - center[2], roll_range, invert_roll), deadzone)
                 virtual_device.emit_pose(yaw, pitch, roll)
                 if udp_socket:
                     packet = f"BTR1 {normalized_axis(yaw):.6f} {normalized_axis(pitch):.6f} {normalized_axis(roll):.6f}".encode()
@@ -295,17 +337,19 @@ def main():
 
             now = time.monotonic()
             if now - last_status > 1.0:
-                yaw_delta = angle_delta(pose[0], center[0])
-                pitch_delta = pose[1] - center[1]
-                roll_delta = pose[2] - center[2]
+                yaw_delta = angle_delta(filtered_pose[0], center[0])
+                pitch_delta = filtered_pose[1] - center[1]
+                roll_delta = filtered_pose[2] - center[2]
                 STATUS_FILE.write_text(
                     "mode=trackir "
                     f"paused={paused} "
                     f"pose_ypr=({pose[0]:.3f},{pose[1]:.3f},{pose[2]:.3f}) "
+                    f"filtered_ypr=({filtered_pose[0]:.3f},{filtered_pose[1]:.3f},{filtered_pose[2]:.3f}) "
+                    f"jump={jump:.3f} "
                     f"delta_ypr=({yaw_delta:.3f},{pitch_delta:.3f},{roll_delta:.3f}) "
-                    f"axis_ypr=({axis_value(yaw_delta, yaw_range, invert_yaw)},"
-                    f"{axis_value(pitch_delta, pitch_range, invert_pitch)},"
-                    f"{axis_value(roll_delta, roll_range, invert_roll)})\n"
+                    f"axis_ypr=({apply_deadzone(axis_value(yaw_delta, yaw_range, invert_yaw), deadzone)},"
+                    f"{apply_deadzone(axis_value(pitch_delta, pitch_range, invert_pitch), deadzone)},"
+                    f"{apply_deadzone(axis_value(roll_delta, roll_range, invert_roll), deadzone)})\n"
                 )
                 last_status = now
 

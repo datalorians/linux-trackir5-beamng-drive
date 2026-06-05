@@ -151,6 +151,9 @@ Available settings:
 | `BEAMNG_TRACKIR_PITCH_DEG` | `120` | Real head pitch needed for full virtual pitch axis |
 | `BEAMNG_TRACKIR_ROLL_DEG` | `120` | Real head roll needed for full virtual roll axis |
 | `BEAMNG_TRACKIR_HZ` | `60` | Virtual device update rate |
+| `BEAMNG_TRACKIR_SMOOTHING` | `0.025` | Low-pass smoothing factor; lower is calmer |
+| `BEAMNG_TRACKIR_OUTLIER_DEG` | `10` | Ignore pose frames that jump farther than this |
+| `BEAMNG_TRACKIR_DEADZONE` | `0.12` | Ignore small filtered axis movement around center |
 | `BEAMNG_TRACKIR_INVERT_YAW` | `0` | Set to `1` to invert yaw |
 | `BEAMNG_TRACKIR_INVERT_PITCH` | `0` | Set to `1` to invert pitch |
 | `BEAMNG_TRACKIR_INVERT_ROLL` | `0` | Set to `1` to invert roll |
