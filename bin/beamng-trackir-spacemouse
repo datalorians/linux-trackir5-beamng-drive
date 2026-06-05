@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+import ctypes
+import os
+import signal
+import sys
+import time
+from pathlib import Path
+
+from evdev import AbsInfo, UInput, ecodes
+
+
+STATE_DIR = Path.home() / ".local/state/beamng-trackir-spacemouse"
+PID_FILE = STATE_DIR / "adapter.pid"
+CENTER_FLAGS = (Path("/tmp/beamng_trackir_center"), Path("/tmp/linuxtrack_npclient_center"))
+PAUSE_FLAGS = (Path("/tmp/beamng_trackir_pause"), Path("/tmp/linuxtrack_npclient_pause"))
+
+
+def clamp(value, low, high):
+    return max(low, min(high, value))
+
+
+def env_float(name, default):
+    try:
+        return float(os.environ.get(name, default))
+    except ValueError:
+        return float(default)
+
+
+def env_bool(name, default=False):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.lower() in ("1", "true", "yes", "on")
+
+
+def angle_delta(value, center):
+    delta = value - center
+    while delta > 180.0:
+        delta -= 360.0
+    while delta < -180.0:
+        delta += 360.0
+    return delta
+
+
+def axis_value(delta, range_degrees, invert=False):
+    value = clamp(delta / range_degrees, -1.0, 1.0)
+    if invert:
+        value *= -1.0
+    return int(value * 32767)
+
+
+def remove_flag(flag):
+    try:
+        flag.unlink()
+    except FileNotFoundError:
+        pass
+
+
+class LinuxTrack:
+    def __init__(self):
+        self.lib = None
+        self.shutdown_fn = None
+
+    def start(self):
+        prefix = Path(os.environ.get("LINUXTRACK_PREFIX", str(Path.home() / ".local/opt/linuxtrack-trackir")))
+        candidates = []
+        if os.environ.get("LINUXTRACK_LIB"):
+            candidates.append(Path(os.environ["LINUXTRACK_LIB"]))
+        candidates.extend(
+            [
+                prefix / "lib/linuxtrack/liblinuxtrack.so.0.0.0",
+                prefix / "lib/liblinuxtrack.so.0.0.0",
+                Path("/usr/local/lib/linuxtrack/liblinuxtrack.so.0.0.0"),
+                Path("/usr/lib/linuxtrack/liblinuxtrack.so.0.0.0"),
+            ]
+        )
+        lib_path = next((path for path in candidates if path.exists()), None)
+        if not lib_path:
+            raise RuntimeError("LinuxTrack library was not found. Set LINUXTRACK_LIB if needed.")
+
+        self.lib = ctypes.CDLL(str(lib_path))
+        self.init_fn = getattr(self.lib, "linuxtrack_init", None) or getattr(self.lib, "ltr_init", None)
+        self.pose_fn = getattr(self.lib, "linuxtrack_get_pose", None) or getattr(self.lib, "ltr_get_pose", None)
+        self.shutdown_fn = getattr(self.lib, "linuxtrack_shutdown", None) or getattr(self.lib, "ltr_shutdown", None)
+        if not self.init_fn or not self.pose_fn:
+            raise RuntimeError(f"{lib_path} does not expose the LinuxTrack pose API.")
+
+        self.init_fn.argtypes = [ctypes.c_char_p]
+        self.init_fn.restype = ctypes.c_int
+        self.pose_fn.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+        self.pose_fn.restype = ctypes.c_int
+
+        profile = os.environ.get("BEAMNG_TRACKIR_PROFILE", "").encode() or None
+        state = self.init_fn(profile)
+        if state not in (0, 1, 2):
+            raise RuntimeError(f"linuxtrack_init returned {state}.")
+
+    def pose(self):
+        yaw = ctypes.c_float()
+        pitch = ctypes.c_float()
+        roll = ctypes.c_float()
+        tx = ctypes.c_float()
+        ty = ctypes.c_float()
+        tz = ctypes.c_float()
+        counter = ctypes.c_uint32()
+        result = self.pose_fn(
+            ctypes.byref(yaw),
+            ctypes.byref(pitch),
+            ctypes.byref(roll),
+            ctypes.byref(tx),
+            ctypes.byref(ty),
+            ctypes.byref(tz),
+            ctypes.byref(counter),
+        )
+        if result < 0:
+            return None
+        return yaw.value, pitch.value, roll.value, tx.value, ty.value, tz.value
+
+    def shutdown(self):
+        if self.shutdown_fn:
+            self.shutdown_fn()
+
+
+class BeamNGSpaceMouse:
+    def __init__(self):
+        caps = {
+            ecodes.EV_ABS: [
+                (ecodes.ABS_X, AbsInfo(0, -32768, 32767, 0, 0, 0)),
+                (ecodes.ABS_Y, AbsInfo(0, -32768, 32767, 0, 0, 0)),
+                (ecodes.ABS_Z, AbsInfo(0, -32768, 32767, 0, 0, 0)),
+                (ecodes.ABS_RX, AbsInfo(0, -32768, 32767, 0, 0, 0)),
+                (ecodes.ABS_RY, AbsInfo(0, -32768, 32767, 0, 0, 0)),
+                (ecodes.ABS_RZ, AbsInfo(0, -32768, 32767, 0, 0, 0)),
+            ],
+        }
+        self.ui = UInput(
+            caps,
+            name=os.environ.get("BEAMNG_TRACKIR_DEVICE_NAME", "SpaceMouse Pro"),
+            vendor=0x046D,
+            product=0xC62B,
+            version=0x0111,
+            bustype=ecodes.BUS_USB,
+        )
+
+    def emit_pose(self, yaw, pitch, roll):
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, yaw)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RX, pitch)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_RY, roll)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_X, 0)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_Y, 0)
+        self.ui.write(ecodes.EV_ABS, ecodes.ABS_Z, 0)
+        self.ui.syn()
+
+    def close(self):
+        self.emit_pose(0, 0, 0)
+        self.ui.close()
+
+
+def main():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    PID_FILE.write_text(str(os.getpid()))
+
+    yaw_range = env_float("BEAMNG_TRACKIR_YAW_DEG", "45")
+    pitch_range = env_float("BEAMNG_TRACKIR_PITCH_DEG", "30")
+    roll_range = env_float("BEAMNG_TRACKIR_ROLL_DEG", "45")
+    hz = clamp(env_float("BEAMNG_TRACKIR_HZ", "60"), 10, 240)
+    invert_yaw = env_bool("BEAMNG_TRACKIR_INVERT_YAW", False)
+    invert_pitch = env_bool("BEAMNG_TRACKIR_INVERT_PITCH", False)
+    invert_roll = env_bool("BEAMNG_TRACKIR_INVERT_ROLL", False)
+
+    trackir = LinuxTrack()
+    trackir.start()
+    virtual_device = BeamNGSpaceMouse()
+    center = None
+    paused = False
+    running = True
+
+    def stop(_signum, _frame):
+        nonlocal running
+        running = False
+
+    signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGTERM, stop)
+
+    print("Started BeamNG.drive TrackIR 5 virtual 6DOF input.")
+    print("BeamNG should see a SpaceMouse Pro-compatible camera device.")
+    print(f"PID: {os.getpid()}")
+    sys.stdout.flush()
+
+    try:
+        while running:
+            for flag in CENTER_FLAGS:
+                if flag.exists():
+                    center = None
+                    remove_flag(flag)
+                    print("Center requested.")
+                    sys.stdout.flush()
+
+            for flag in PAUSE_FLAGS:
+                if flag.exists():
+                    paused = not paused
+                    remove_flag(flag)
+                    virtual_device.emit_pose(0, 0, 0)
+                    print("Paused." if paused else "Resumed.")
+                    sys.stdout.flush()
+
+            pose = trackir.pose()
+            if pose is None:
+                time.sleep(1.0 / hz)
+                continue
+
+            if center is None:
+                center = pose
+                virtual_device.emit_pose(0, 0, 0)
+                print(f"Centered at yaw={pose[0]:.2f}, pitch={pose[1]:.2f}, roll={pose[2]:.2f}.")
+                sys.stdout.flush()
+                time.sleep(1.0 / hz)
+                continue
+
+            if not paused:
+                yaw = axis_value(angle_delta(pose[0], center[0]), yaw_range, invert_yaw)
+                pitch = axis_value(pose[1] - center[1], pitch_range, invert_pitch)
+                roll = axis_value(pose[2] - center[2], roll_range, invert_roll)
+                virtual_device.emit_pose(yaw, pitch, roll)
+
+            time.sleep(1.0 / hz)
+    finally:
+        virtual_device.close()
+        trackir.shutdown()
+        remove_flag(PID_FILE)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as exc:
+        print(f"beamng-trackir-spacemouse: {exc}", file=sys.stderr)
+        sys.exit(1)

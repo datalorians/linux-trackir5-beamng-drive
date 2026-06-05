@@ -1,58 +1,30 @@
-# Notes
+# Native BeamNG.drive Notes
 
-BeamNG.drive appears to use NaturalPoint-style TrackIR integration through
-`NPClient64.dll` under Proton.
+BeamNG.drive app id: `284160`.
 
-Observed strings in the local `Bin64/BeamNG.drive.x64.exe` binary:
-
-```text
-TrackIR
-TrackIR: attempted to initialize twice
-TrackIR not activated: No main window found
-TrackIR not activated: DLL detected and loaded, but DllSignature is unexpected
-TrackIR not activated: one or more functions are missing from the TrackIR DLL
-TrackIR: NaturalPoint software version is {}.{}
-TrackIR - start: unable to start data transmission
-NP_RegisterProgramProfileID
-Software\NaturalPoint\NATURALPOINT\NPClient Location
-```
-
-The BeamNG.drive launcher is in the game root:
+The user's Steam logs show the native Linux executable is being launched:
 
 ```text
-BeamNG.drive.exe
+BeamNG.drive/BinLinux/BeamNG.drive.x64
 ```
 
-The main Windows game binary is:
+The native binary includes OpenXR support and BeamNG's regular input system, but
+it does not expose the Windows TrackIR/NaturalPoint API. The native-friendly
+path is therefore to provide head pose through an input device BeamNG already
+binds to camera movement.
+
+BeamNG ships a `SpaceMouse Pro` input map at:
 
 ```text
-Bin64/BeamNG.drive.x64.exe
+settings/inputmaps/c62b046d.json
 ```
 
-The native Linux binary is:
+That map binds:
 
-```text
-BinLinux/BeamNG.drive.x64
-```
+- `rzaxis` → `yawAbs`
+- `rxaxis` → `pitchAbs`
+- `ryaxis` → `rollAbs`
+- `xaxis` / `yaxis` / `zaxis` → translation camera axes
 
-Local testing found TrackIR/NaturalPoint strings in the Windows `Bin64` binary,
-but not in the native Linux binary. Steam logs showed a native launch like:
-
-```text
-SteamLaunch AppId=284160 -- .../BeamNG.drive/BinLinux/BeamNG.drive.x64 -forceCloud on
-```
-
-That launch creates an empty `compatdata/284160` directory but no Proton
-`pfx`, because Proton was not used.
-
-The installer copies the bridge into both locations and, when the Proton prefix
-exists, registers `C:\linuxtrack` as the NaturalPoint client location.
-
-The patched bridge uses:
-
-```text
-/tmp/linuxtrack_npclient_center
-/tmp/linuxtrack_npclient_pause
-```
-
-The patched LinuxTrack server mirrors pause state to the TrackIR 5 status LED.
+The helper in this repo creates a virtual uinput device using vendor/product
+`046d:c62b`, then feeds TrackIR yaw, pitch, and roll into those axes.

@@ -1,232 +1,209 @@
-# 🏁 TrackIR 5 for BeamNG.drive on Linux / Proton
+# 🏁 TrackIR 5 for BeamNG.drive Native Linux
 
-Use a **NaturalPoint TrackIR 5** camera with **BeamNG.drive** on Linux through
-Steam/Proton.
+Use a NaturalPoint TrackIR 5 camera with the **native Linux build** of
+BeamNG.drive.
 
-BeamNG.drive has built-in Windows TrackIR support. This package adds the Linux
-side: LinuxTrack for the TrackIR 5 camera, plus a Proton-compatible
-`NPClient64.dll` bridge so BeamNG.drive can talk to the hardware.
+BeamNG.drive's Linux binary does not expose the Windows TrackIR/NaturalPoint
+API. This project takes a native route instead: it reads TrackIR 5 pose data
+through LinuxTrack and creates a virtual 6-axis input device that BeamNG already
+knows how to bind to camera head movement.
 
 ## ✨ What This Does
 
-- Builds LinuxTrack from the maintained `exuvo/linuxtrack` fork.
-- Installs TrackIR 5 USB permissions through a udev rule.
-- Adds a BeamNG.drive LinuxTrack profile.
-- Builds and installs a Proton-compatible `NPClient64.dll` / `NPClient.dll`.
-- Installs the bridge for the BeamNG.drive launcher and `Bin64` game binary.
-- Adds bridge-level recenter and pause/resume control.
-- Mirrors pause state to the TrackIR 5 status LED, matching the familiar
-  Windows TrackIR behavior.
+- 📡 Reads yaw, pitch, and roll from a NaturalPoint TrackIR 5 through LinuxTrack.
+- 🎮 Creates a virtual `SpaceMouse Pro`-compatible 6DOF input device through
+  Linux `uinput`.
+- 🧭 Uses BeamNG.drive's built-in absolute camera actions:
+  `yawAbs`, `pitchAbs`, and `rollAbs`.
+- 🎯 Supports recenter and pause helper commands, suitable for F9/F10-style
+  hotkeys if you want the familiar TrackIR workflow.
+- 🐧 Targets BeamNG.drive's native Linux executable.
 
 ## 🚫 What This Does Not Do
 
-- It does not include NaturalPoint firmware, NaturalPoint software, or
-  proprietary NaturalPoint DLLs.
-- It does not add vehicle input, wheel, or force-feedback changes.
-- It does not modify BeamNG.drive gameplay files or input bindings.
+- It does not use Proton.
+- It does not install or load NaturalPoint DLLs.
+- It does not patch BeamNG.drive.
+- It does not add steering wheel, joystick, gamepad, or vehicle controls.
+- It does not require a real 3Dconnexion SpaceMouse device.
 
-## ✅ Tested / Observed Setup
+The virtual device pretends to be a `SpaceMouse Pro` because BeamNG.drive ships
+a default input map for that device:
 
-| Item | Value |
-| --- | --- |
-| Game | BeamNG.drive |
-| Steam app ID | `284160` |
-| TrackIR integration observed | `TrackIR`, `NPClient64.dll`, `NP_RegisterProgramProfileID`, NaturalPoint registry key, and TrackIR start/stop strings in `Bin64/BeamNG.drive.x64.exe` |
-| TrackIR camera | TrackIR 5, USB ID `131d:0158` |
-| Clip | TrackClip Pro |
-| Proton prefix | `~/.local/share/Steam/steamapps/compatdata/284160/pfx` |
-| Game directory | `~/.local/share/Steam/steamapps/common/BeamNG.drive` |
-| Main game binary | `~/.local/share/Steam/steamapps/common/BeamNG.drive/Bin64/BeamNG.drive.x64.exe` |
-| Desktop tested | Cinnamon/X11 |
-
-BeamNG.drive is primarily a Windows game. BeamNG's own FAQ says Linux/Proton is
-not an officially guaranteed platform, even though many users run it that way.
-
-Important: Steam may launch BeamNG.drive's native Linux binary on Linux:
-
-```text
-~/.local/share/Steam/steamapps/common/BeamNG.drive/BinLinux/BeamNG.drive.x64
+```json
+{
+  "name": "SpaceMouse Pro",
+  "vidpid": "C62B046D",
+  "bindings": [
+    {"control": "rxaxis", "action": "pitchAbs"},
+    {"control": "ryaxis", "action": "rollAbs"},
+    {"control": "rzaxis", "action": "yawAbs", "isInverted": true}
+  ]
+}
 ```
 
-This package targets the Windows/Proton build because the observed
-NaturalPoint/TrackIR integration is in:
+That is the native input path this package uses.
 
-```text
-~/.local/share/Steam/steamapps/common/BeamNG.drive/Bin64/BeamNG.drive.x64.exe
-```
+## 📦 Requirements
 
-## 📦 Install
+- BeamNG.drive installed through Steam using the native Linux build.
+- A NaturalPoint TrackIR 5 camera.
+- LinuxTrack installed by this repo or already available on your system.
+- Python 3.
+- Python `evdev`.
+- Access to `/dev/uinput`.
 
-Install build dependencies first. On Debian/Ubuntu-like systems:
+On Ubuntu/Mint-style systems:
 
 ```bash
-sudo apt install git build-essential autoconf automake libtool pkg-config \
-  libusb-1.0-0-dev wine-staging-dev wine mono-utils
+sudo apt install python3-evdev
 ```
 
-Clone this repo:
+If your distro package is unavailable:
 
 ```bash
-git clone https://github.com/datalorians/linux-proton-trackir5-beamng-drive.git
-cd linux-proton-trackir5-beamng-drive
+python3 -m pip install --user evdev
 ```
 
-Build/install LinuxTrack and install the TrackIR 5 udev rule:
+## 🚀 Install
+
+Clone the repo:
+
+```bash
+git clone https://github.com/datalorians/linux-trackir5-beamng-drive.git
+cd linux-trackir5-beamng-drive
+```
+
+Install LinuxTrack if you do not already have the TrackIR-capable build:
 
 ```bash
 ./scripts/install-linuxtrack.sh
-./scripts/install-udev-rule.sh
 ```
 
-Replug the TrackIR camera or log out/in after installing the udev rule.
-
-LinuxTrack still needs the firmware/game data from the official TrackIR 5
-Windows installer.
-
-Install the BeamNG.drive profile and Proton bridge:
+Install the TrackIR profile:
 
 ```bash
 ./scripts/install-profile.sh
-./scripts/build-wine-bridge.sh
-./scripts/install-beamng-drive-bridge.sh
 ```
 
-Install helper commands:
+Install the helper commands:
 
 ```bash
 ./scripts/install-helpers.sh
 ```
 
-Optional Cinnamon/X11 shortcut installer:
+Install udev access rules for the TrackIR camera and `/dev/uinput`:
 
 ```bash
-./scripts/install-cinnamon-hotkeys.sh
+./scripts/install-udev-rule.sh
 ```
 
-## 🎮 Steam Setup
+After installing udev rules, unplug and replug the TrackIR camera. You may also
+need to log out and back in once so group and device ACL changes take effect.
 
-Force BeamNG.drive to use Proton:
+## ▶️ Steam Launch Option
 
-1. Open BeamNG.drive properties in Steam.
-2. Go to `Compatibility`.
-3. Enable `Force the use of a specific Steam Play compatibility tool`.
-4. Choose Proton Experimental or another Proton version you normally use.
-
-BeamNG.drive should start TrackIR when it loads the installed `NPClient64.dll`.
-TrackIR itself does **not** need a Steam launch option.
-
-Launch BeamNG.drive through Steam after forcing Proton. If BeamNG.drive creates
-the Proton prefix after that first Proton launch, rerun:
+Set this as the BeamNG.drive launch option in Steam:
 
 ```bash
-./scripts/install-beamng-drive-bridge.sh
+bash -lc '$HOME/.local/bin/beamng-trackir-spacemouse & cleanup(){ $HOME/.local/bin/beamng-trackir-spacemouse-stop; }; trap cleanup EXIT; "$@"; rc=$?; cleanup; exit $rc' -- %command%
 ```
 
-That second run writes the NaturalPoint registry path inside the Proton prefix.
-If `~/.local/share/Steam/steamapps/compatdata/284160` exists but has no `pfx`
-directory, BeamNG.drive has probably launched the native Linux binary instead
-of the Windows/Proton binary.
+Launch the native Linux build of BeamNG.drive. The helper starts before the game
+and stops after the game exits.
 
-### Optional Exit Cleanup
+## ✅ First Test
 
-LinuxTrack can sometimes leave its socket/lock files behind after the game
-closes. If the TrackIR LEDs stay lit after BeamNG.drive exits, use this Steam
-launch option so cleanup runs when the game process ends:
+1. Launch BeamNG.drive from Steam with the launch option above.
+2. Open `Options` → `Controls` → `Hardware`.
+3. Look for a connected `SpaceMouse Pro`-compatible device.
+4. Enter a vehicle and switch to a cockpit/driver camera.
+5. Turn your head left/right and up/down.
 
-```text
-bash -lc 'cleanup(){ "$HOME/.local/bin/trackir-linux-stop"; }; trap cleanup EXIT; "$@"; rc=$?; cleanup; exit $rc' -- %command%
+If the camera does not move, open the BeamNG controls screen and confirm the
+device has camera bindings for `yawAbs`, `pitchAbs`, and `rollAbs`.
+
+## 🎛️ Tuning
+
+You can tune the virtual head-tracker mapping with environment variables before
+the `bash -lc` part of the Steam launch option.
+
+Example:
+
+```bash
+BEAMNG_TRACKIR_YAW_DEG=60 BEAMNG_TRACKIR_PITCH_DEG=35 bash -lc '...'
 ```
 
-This does not start TrackIR. BeamNG.drive still starts TrackIR by loading the
-installed `NPClient64.dll`; the wrapper only runs cleanup after the game closes.
+Available settings:
 
-## 👀 In-Game Behavior
+| Variable | Default | Meaning |
+| --- | ---: | --- |
+| `BEAMNG_TRACKIR_YAW_DEG` | `45` | Real head yaw needed for full virtual yaw axis |
+| `BEAMNG_TRACKIR_PITCH_DEG` | `30` | Real head pitch needed for full virtual pitch axis |
+| `BEAMNG_TRACKIR_ROLL_DEG` | `45` | Real head roll needed for full virtual roll axis |
+| `BEAMNG_TRACKIR_HZ` | `60` | Virtual device update rate |
+| `BEAMNG_TRACKIR_INVERT_YAW` | `0` | Set to `1` to invert yaw |
+| `BEAMNG_TRACKIR_INVERT_PITCH` | `0` | Set to `1` to invert pitch |
+| `BEAMNG_TRACKIR_INVERT_ROLL` | `0` | Set to `1` to invert roll |
+| `BEAMNG_TRACKIR_DEVICE_NAME` | `SpaceMouse Pro` | Virtual device name shown to BeamNG |
+| `LINUXTRACK_LIB` | auto | Override LinuxTrack library path |
 
-BeamNG.drive uses TrackIR as head tracking for supported cameras/views. The
-expected feel is:
+## ⌨️ Center And Pause
 
-- Your existing vehicle input setup still drives the vehicle.
-- TrackIR controls camera/head movement.
-- Interior camera is the best first test.
-- If the view feels tiny or too aggressive, tune the LinuxTrack BeamNG.drive
-  profile first.
-
-BeamNG.drive may also have camera and head-tracking settings in its Options UI.
-Check those if the DLL loads but the camera does not move.
-
-## ⌨️ Recenter and Pause Controls
-
-The helper commands are:
+This package includes small commands that request center and pause behavior from
+the running helper:
 
 ```bash
 trackir-linux-center
-trackir-linux-toggle
 trackir-linux-pause
+trackir-linux-toggle
 trackir-linux-resume
 ```
 
-The optional Cinnamon installer binds these to the classic TrackIR-style keys:
-
-- `F9` for recenter
-- `F10` for pause/resume
-
-Those keys are not a special project feature; they are simply the familiar
-Windows TrackIR defaults. You can bind any keys you want in your desktop
-environment, keyboard utility, Stream Deck, joystick macro tool, or window
-manager.
+TrackIR's Windows software traditionally uses hotkeys such as F9 and F10 for
+centering and pausing. Those keys are not magic inside this project; they are
+just convenient defaults you can bind in your desktop environment, keyboard
+software, macro pad, or Steam Input.
 
 For example, bind:
 
-```text
-your preferred recenter key -> ~/.local/bin/trackir-linux-center
-your preferred pause key    -> ~/.local/bin/trackir-linux-toggle
-```
+- Center view → `$HOME/.local/bin/trackir-linux-center`
+- Toggle pause → `$HOME/.local/bin/trackir-linux-toggle`
 
-Pause freezes the last pose returned to the game and turns the TrackIR status
-LED to the paused color. It does not shut down the camera service.
+If F9/F10 conflict with BeamNG.drive or your desktop, use any keys you prefer.
 
 ## 🧯 Troubleshooting
 
-Debug launch option:
+Check whether the virtual device can be created:
 
 ```bash
-LINUXTRACK_DBG=w %command%
+$HOME/.local/bin/beamng-trackir-spacemouse
 ```
 
-Possible debug log locations:
-
-```text
-~/.local/share/Steam/steamapps/common/BeamNG.drive/NPClient.log
-~/.local/share/Steam/steamapps/common/BeamNG.drive/Bin64/NPClient.log
-```
-
-Rollback the installed bridge:
+If you see a `/dev/uinput` permission error, install the udev rule and log out
+and back in:
 
 ```bash
-./scripts/rollback-bridge.sh
+./scripts/install-udev-rule.sh
 ```
 
-Stop leftover LinuxTrack state manually:
+If LinuxTrack cannot find the camera, replug the TrackIR 5 and test LinuxTrack
+directly:
 
 ```bash
-trackir-linux-stop
+$HOME/.local/bin/trackir-linux-pipe
 ```
 
-See [Notes](docs/notes.md) for observed bridge details and local behavior.
+If BeamNG sees the device but camera movement is backwards, set the relevant
+invert variable in the Steam launch option.
 
-## 🤖 AI Disclosure
+## 🧠 AI Disclosure
 
-This package was developed with assistance from OpenAI's Codex/ChatGPT. The
-scripts, patches, and documentation were reviewed locally before publication,
-but they are community-maintained and provided as-is.
+This project was created with assistance from OpenAI's Codex. The hardware
+testing, game-specific decisions, and validation were guided by a real Linux
+user with a TrackIR 5 kit and BeamNG.drive installed locally.
 
-AI disclosure is separate from licensing: the disclosure explains how the work
-was produced, while the license explains what rights you have to use and modify
-the code.
+## ⚖️ License
 
-## 📄 License
-
-No license has been selected for this repository.
-
-LinuxTrack has its own license. NaturalPoint firmware, software, and trademarks
-belong to their respective owners and are not included in this repository.
+No license is currently granted. That means normal copyright restrictions apply
+unless the repository owner adds a license later.

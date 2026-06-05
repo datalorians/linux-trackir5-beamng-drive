@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: > /tmp/linuxtrack_npclient_pause
-echo "paused"
+: > /tmp/beamng_trackir_pause
+echo "pause toggled"
