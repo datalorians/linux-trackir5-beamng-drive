@@ -190,9 +190,9 @@ def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     PID_FILE.write_text(str(os.getpid()))
 
-    yaw_range = env_float("BEAMNG_TRACKIR_YAW_DEG", "45")
-    pitch_range = env_float("BEAMNG_TRACKIR_PITCH_DEG", "30")
-    roll_range = env_float("BEAMNG_TRACKIR_ROLL_DEG", "45")
+    yaw_range = env_float("BEAMNG_TRACKIR_YAW_DEG", "180")
+    pitch_range = env_float("BEAMNG_TRACKIR_PITCH_DEG", "120")
+    roll_range = env_float("BEAMNG_TRACKIR_ROLL_DEG", "120")
     hz = clamp(env_float("BEAMNG_TRACKIR_HZ", "60"), 10, 240)
     invert_yaw = env_bool("BEAMNG_TRACKIR_INVERT_YAW", False)
     invert_pitch = env_bool("BEAMNG_TRACKIR_INVERT_PITCH", False)
@@ -226,7 +226,9 @@ def main():
             for flag in CENTER_FLAGS:
                 if flag.exists():
                     center = None
+                    center_samples.clear()
                     remove_flag(flag)
+                    virtual_device.emit_pose(0, 0, 0)
                     print("Center requested.")
                     sys.stdout.flush()
 

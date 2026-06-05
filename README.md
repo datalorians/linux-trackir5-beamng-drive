@@ -139,9 +139,9 @@ Available settings:
 
 | Variable | Default | Meaning |
 | --- | ---: | --- |
-| `BEAMNG_TRACKIR_YAW_DEG` | `45` | Real head yaw needed for full virtual yaw axis |
-| `BEAMNG_TRACKIR_PITCH_DEG` | `30` | Real head pitch needed for full virtual pitch axis |
-| `BEAMNG_TRACKIR_ROLL_DEG` | `45` | Real head roll needed for full virtual roll axis |
+| `BEAMNG_TRACKIR_YAW_DEG` | `180` | Real head yaw needed for full virtual yaw axis |
+| `BEAMNG_TRACKIR_PITCH_DEG` | `120` | Real head pitch needed for full virtual pitch axis |
+| `BEAMNG_TRACKIR_ROLL_DEG` | `120` | Real head roll needed for full virtual roll axis |
 | `BEAMNG_TRACKIR_HZ` | `60` | Virtual device update rate |
 | `BEAMNG_TRACKIR_INVERT_YAW` | `0` | Set to `1` to invert yaw |
 | `BEAMNG_TRACKIR_INVERT_PITCH` | `0` | Set to `1` to invert pitch |
