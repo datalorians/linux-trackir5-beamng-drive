@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+helper="$HOME/.local/bin/beamng-trackir-spacemouse"
+stopper="$HOME/.local/bin/beamng-trackir-spacemouse-stop"
+
+cleanup() {
+  "$stopper" || true
+}
+
+trap cleanup EXIT
+
+"$helper" &
+
+for _ in {1..80}; do
+  if grep -q 'Name="SpaceMouse Pro"' /proc/bus/input/devices 2>/dev/null; then
+    break
+  fi
+  sleep 0.1
+done
+
+if ! grep -q 'Name="SpaceMouse Pro"' /proc/bus/input/devices 2>/dev/null; then
+  echo "BeamNG TrackIR virtual input device did not appear before launch." >&2
+  exit 1
+fi
+
+"$@"
+rc=$?
+cleanup
+exit "$rc"

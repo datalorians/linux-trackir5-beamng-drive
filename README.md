@@ -106,11 +106,12 @@ need to log out and back in once so group and device ACL changes take effect.
 Set this as the BeamNG.drive launch option in Steam:
 
 ```bash
-bash -lc '$HOME/.local/bin/beamng-trackir-spacemouse & cleanup(){ $HOME/.local/bin/beamng-trackir-spacemouse-stop; }; trap cleanup EXIT; "$@"; rc=$?; cleanup; exit $rc' -- %command%
+$HOME/.local/bin/beamng-trackir-launch %command%
 ```
 
-Launch the native Linux build of BeamNG.drive. The helper starts before the game
-and stops after the game exits.
+Launch the native Linux build of BeamNG.drive. The wrapper starts the helper,
+waits for the virtual 6DOF device to exist, launches the game, and stops the
+helper after the game exits.
 
 ## ✅ First Test
 
