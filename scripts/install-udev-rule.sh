@@ -3,7 +3,9 @@ set -euo pipefail
 
 rule_file="/etc/udev/rules.d/70-trackir5.rules"
 rule='SUBSYSTEM=="usb", ATTR{idVendor}=="131d", ATTR{idProduct}=="0158", MODE="0660", GROUP="plugdev", TAG+="uaccess"
-KERNEL=="uinput", MODE="0660", GROUP="plugdev", TAG+="uaccess"'
+KERNEL=="uinput", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+KERNEL=="event*", ATTRS{name}=="SpaceMouse Pro", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+KERNEL=="js*", ATTRS{name}=="SpaceMouse Pro", MODE="0660", GROUP="plugdev", TAG+="uaccess"'
 
 if ! getent group plugdev >/dev/null; then
   sudo groupadd plugdev

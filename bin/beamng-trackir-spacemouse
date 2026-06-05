@@ -132,6 +132,7 @@ class LinuxTrack:
 class BeamNGSpaceMouse:
     def __init__(self):
         caps = {
+            ecodes.EV_KEY: [ecodes.BTN_0],
             ecodes.EV_ABS: [
                 (ecodes.ABS_X, AbsInfo(0, -32768, 32767, 0, 0, 0)),
                 (ecodes.ABS_Y, AbsInfo(0, -32768, 32767, 0, 0, 0)),
@@ -149,6 +150,8 @@ class BeamNGSpaceMouse:
             version=0x0111,
             bustype=ecodes.BUS_USB,
         )
+        self.ui.write(ecodes.EV_KEY, ecodes.BTN_0, 0)
+        self.ui.syn()
 
     def emit_pose(self, yaw, pitch, roll):
         self.ui.write(ecodes.EV_ABS, ecodes.ABS_RZ, yaw)
