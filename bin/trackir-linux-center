@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: > /tmp/linuxtrack_npclient_center
+echo "center requested"

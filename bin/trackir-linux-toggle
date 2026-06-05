@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+flag=/tmp/linuxtrack_npclient_pause
+
+if [[ -e "$flag" ]]; then
+  rm -f "$flag"
+  echo "running"
+else
+  : > "$flag"
+  echo "paused"
+fi
